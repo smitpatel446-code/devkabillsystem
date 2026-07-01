@@ -13,12 +13,16 @@ const firebaseConfig = {
 };
 
 let fbDatabase = null;
+let fbAuth = null;
 let isFirebaseReady = false;
 
 try {
   if (typeof firebase !== 'undefined') {
     firebase.initializeApp(firebaseConfig);
     fbDatabase = firebase.database();
+    if (typeof firebase.auth === 'function') {
+      fbAuth = firebase.auth();
+    }
     isFirebaseReady = true;
     console.log("Firebase initialized successfully on client.");
   } else {
@@ -42,9 +46,7 @@ function setupFirebaseSync(onRemoteChangeCallback) {
   // Set up real-time listener on the main POS database node
   fbDatabase.ref('pos_db').on('value', (snapshot) => {
     const data = snapshot.val();
-    if (data) {
-      onRemoteChangeCallback(data);
-    }
+    onRemoteChangeCallback(data);
   }, (error) => {
     console.error("Firebase database sync error:", error);
   });
