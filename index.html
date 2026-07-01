@@ -1536,15 +1536,15 @@
         <label style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight:700; display:block; margin-bottom:4px;">Demo Quick Swap</label>
         <select id="sidebar-role-swap" style="width: 100%; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius:4px; padding: 4px; font-size: 0.8rem; cursor: pointer; outline:none;">
           <option value="super_admin">Super Admin</option>
-          <option value="waiter">Ravi Waiter</option>
-          <option value="cashier">Asha Cashier</option>
+          <option value="waiter">Waiter Staff</option>
+          <option value="cashier">Cashier Staff</option>
           <option value="kitchen">Kitchen Staff</option>
         </select>
       </div>
 
       <div class="user-profile">
         <div class="user-info">
-          <span class="user-name" id="profile-name">Ravi Waiter</span>
+          <span class="user-name" id="profile-name">Super Admin</span>
           <span class="user-role-badge" id="profile-role">Waiter</span>
         </div>
         <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem;" onclick="logout()">
@@ -1816,7 +1816,7 @@
             <span class="font-mono text-sm" style="color: var(--text-muted);" id="order-token-display">Token #001</span>
           </div>
           <div>
-            <span style="font-size: 0.85rem; color: var(--text-muted);" id="order-waiter-info">Waiter: Ravi</span>
+            <span style="font-size: 0.85rem; color: var(--text-muted);" id="order-waiter-info">Waiter</span>
           </div>
         </div>
 
@@ -1885,20 +1885,20 @@
     let currentUser = null;
 
     // Default mock structures matching the original react version
-    const DEFAULT_OUTLET_ID = 'sea-breeze-rooftop';
+    const DEFAULT_OUTLET_ID = 'restaurant-outlet';
     const DEFAULT_OUTLET = {
       id: DEFAULT_OUTLET_ID,
-      name: 'Sea Breeze Rooftop Restaurant',
-      type: 'rooftop',
-      address: 'Devka Road, Nani Daman',
-      phone: '0260-2253063',
+      name: 'Restaurant Outlet',
+      type: 'dine_in',
+      address: 'Main Road',
+      phone: '0000000000',
       active: true
     };
 
     const DEFAULT_USERS = [
-      { uid: 'mock-admin', email: 'admin@devka.in', name: 'Devka Admin', role: 'super_admin', passwordHash: '240eb51856b3c246fbc90d16ab6f8e77a113bc3a088bc049f50e82c5f590adcd', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() },
-      { uid: 'mock-cashier', email: 'cashier@devka.in', name: 'Asha Cashier', role: 'cashier', passwordHash: 'f7d2ee448408f6259c25f543fb5a7e6b0bf754a004eb6a9c735d97f2617d33d5', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() },
-      { uid: 'mock-waiter', email: 'waiter@devka.in', name: 'Ravi Waiter', role: 'waiter', passwordHash: '7817eb54dbca48842c262c5c8a4df7ca4db5b02660aa2b22ec6a0cf5f1624c9c', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() },
+      { uid: 'mock-admin', email: 'admin@devka.in', name: 'Super Admin', role: 'super_admin', passwordHash: '240eb51856b3c246fbc90d16ab6f8e77a113bc3a088bc049f50e82c5f590adcd', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() },
+      { uid: 'mock-cashier', email: 'cashier@devka.in', name: 'Cashier Staff', role: 'cashier', passwordHash: 'f7d2ee448408f6259c25f543fb5a7e6b0bf754a004eb6a9c735d97f2617d33d5', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() },
+      { uid: 'mock-waiter', email: 'waiter@devka.in', name: 'Waiter Staff', role: 'waiter', passwordHash: '7817eb54dbca48842c262c5c8a4df7ca4db5b02660aa2b22ec6a0cf5f1624c9c', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() },
       { uid: 'mock-kitchen', email: 'kitchen@devka.in', name: 'Kitchen Staff', role: 'kitchen', passwordHash: 'ab9892c55b6a7155e9b8979148d28a3068697b4b39dc5be0092fa023a1a5b88f', outletIds: [DEFAULT_OUTLET_ID], active: true, createdAt: Date.now() }
     ];
 
@@ -1951,12 +1951,18 @@
           if (!db.bills) db.bills = [];
           if (!db.counters) db.counters = { lastToken: 0, lastBillNo: 0 };
 
-          // Backfill password hashes for default users if they are missing
+          // Backfill password hashes and update demo names for default users
           if (db.users) {
             db.users.forEach(u => {
               const defUser = DEFAULT_USERS.find(du => du.uid === u.uid);
-              if (defUser && !u.passwordHash) {
-                u.passwordHash = defUser.passwordHash;
+              if (defUser) {
+                if (!u.passwordHash) {
+                  u.passwordHash = defUser.passwordHash;
+                }
+                // Migrate legacy demo names to generic role names
+                if (u.name === 'Devka Admin') u.name = 'Super Admin';
+                if (u.name === 'Asha Cashier') u.name = 'Cashier Staff';
+                if (u.name === 'Ravi Waiter') u.name = 'Waiter Staff';
               }
             });
           } else {
@@ -2550,17 +2556,28 @@
         }
 
         let ordersInfoBadge = '';
+        let dateText = '';
         if (table.currentOrderId) {
           const order = db.orders.find(o => o.id === table.currentOrderId);
           if (order) {
             ordersInfoBadge = `<span style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--gold-primary); margin-top:1px;">KOT #${order.tokenNumber}</span>`;
+            if (order.createdAt) {
+              const d = new Date(order.createdAt);
+              dateText = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            }
           }
+        }
+
+        if (!dateText) {
+          const d = new Date();
+          dateText = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
         }
 
         card.innerHTML = `
           <span class="table-status-indicator" style="background-color: ${statusColor}"></span>
           <span class="table-label">${table.label}</span>
           <span class="table-capacity">Pax: ${table.capacity}</span>
+          <span style="font-size: 0.6rem; color: var(--text-dim); margin-top: 1px;">Date: ${dateText}</span>
           ${ordersInfoBadge}
           <span class="table-status-text" style="color: ${statusColor}; background-color: ${statusColor}15">${statusText}</span>
         `;
