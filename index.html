@@ -12,6 +12,7 @@
   <!-- Firebase SDKs Compat -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <!-- Database layer -->
   <script src="db.js"></script>
 
@@ -1949,6 +1950,18 @@
           if (!db.orders) db.orders = [];
           if (!db.bills) db.bills = [];
           if (!db.counters) db.counters = { lastToken: 0, lastBillNo: 0 };
+
+          // Backfill password hashes for default users if they are missing
+          if (db.users) {
+            db.users.forEach(u => {
+              const defUser = DEFAULT_USERS.find(du => du.uid === u.uid);
+              if (defUser && !u.passwordHash) {
+                u.passwordHash = defUser.passwordHash;
+              }
+            });
+          } else {
+            db.users = DEFAULT_USERS;
+          }
         } catch (e) {
           db = getInitialDb();
           saveDatabase();
@@ -2015,10 +2028,38 @@
 
       if (!db) loadDatabase();
 
+      let fbAuthSuccess = false;
+
+      // Determine if we should attempt Firebase Auth
+      if (typeof fbAuth !== 'undefined' && fbAuth) {
+        try {
+          await fbAuth.signInWithEmailAndPassword(email, password);
+          console.log("Firebase Auth sign in successful.");
+          fbAuthSuccess = true;
+        } catch (authError) {
+          console.warn("Firebase Auth sign in failed, trying auto-registration:", authError.code);
+          const localUser = db.users.find(u => u.email === email && u.active);
+          
+          if (localUser && (authError.code === 'auth/user-not-found' || authError.code === 'auth/invalid-credential')) {
+            try {
+              const localHash = await hashPassword(password);
+              if (localUser.passwordHash === localHash) {
+                await fbAuth.createUserWithEmailAndPassword(email, password);
+                console.log("Auto-registered user in Firebase Auth successfully.");
+                fbAuthSuccess = true;
+              }
+            } catch (createError) {
+              console.warn("Auto-registration in Firebase Auth failed (likely email/password provider is disabled in Firebase console):", createError);
+            }
+          }
+        }
+      }
+
+      // Final authentication check (local database is the source of truth)
       const user = db.users.find(u => u.email === email && u.active);
       if (user) {
         const hash = await hashPassword(password);
-        if (user.passwordHash === hash) {
+        if (fbAuthSuccess || user.passwordHash === hash) {
           login(user.uid);
           return;
         }
@@ -2259,6 +2300,11 @@
             db = remoteDb;
             localStorage.setItem(DB_KEY, remoteStr);
             renderCurrentPage();
+          }
+        } else {
+          // Seeding empty Firebase Realtime Database node with local database state
+          if (db) {
+            saveDatabaseToFirebase(db);
           }
         }
       });
@@ -3495,6 +3541,16 @@
         } else {
           const newUid = 'usr-' + Date.now();
           const passHash = await hashPassword(password);
+          
+          if (typeof fbAuth !== 'undefined' && fbAuth) {
+            try {
+              await fbAuth.createUserWithEmailAndPassword(email, password);
+              console.log("Created user in Firebase Auth from Admin Panel.");
+            } catch (err) {
+              console.warn("Could not create user in Firebase Auth directly:", err);
+            }
+          }
+
           db.users.push({
             uid: newUid,
             email: email,
